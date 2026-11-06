@@ -1,0 +1,14 @@
+<?php
+namespace Migrator\Component\Migrator\Administrator\View\Dashboard;
+
+use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
+
+class HtmlView extends BaseHtmlView
+{
+    public $report = null;
+
+    public function display($tpl = null)
+    {
+        parent::display($tpl);
+    }
+}
