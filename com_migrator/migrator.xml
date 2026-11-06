@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="component" method="upgrade">
+    <name>COM_MIGRATOR</name>
+    <author>Your Name</author>
+    <version>0.2.0</version>
+    <description>COM_MIGRATOR_DESCRIPTION</description>
+    <element>com_migrator</element>
+    <namespace path="src">Migrator\Component\Migrator</namespace>
+    <administration>
+        <menu img="class:generic">COM_MIGRATOR</menu>
+        <files folder="admin">
+            <folder>src</folder>
+            <folder>language</folder>
+        </files>
+    </administration>
+</extension>
