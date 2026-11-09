@@ -1,8 +1,11 @@
 <?php
 namespace Migrator\Component\Migrator\Administrator\Controller;
 
+\defined('_JEXEC') or die;
+
 use Joomla\CMS\MVC\Controller\BaseController;
 use Joomla\CMS\Factory;
+use Joomla\CMS\Router\Route;
 
 class DisplayController extends BaseController
 {
@@ -27,7 +30,7 @@ class DisplayController extends BaseController
         ];
 
         /** @var \Migrator\Component\Migrator\Administrator\Model\AnalyzeModel $model */
-        $model = $this->getModel('Analyze');
+        $model = $this->getModel('Analyze', 'Administrator');
         $report = $model->analyze($data);
 
         $view = $this->getView('Dashboard', 'html');
