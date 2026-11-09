@@ -126,7 +126,7 @@ class DisplayController extends BaseController
             $writeRow(['Шаблон', $targetPosition, '']);
         }
 
-        $writeRow(['Розширення', 'Назва', 'Елемент', 'Тип', 'Версія', 'Статус перенесення']);
+        $writeRow(['Розширення', 'Назва', 'Елемент', 'Тип', 'Версія джерела', 'Стан на цілі', 'Перенесення даних', 'Рекомендація']);
 
         foreach (($report['extensions'] ?? []) as $extension) {
             $writeRow([
@@ -135,7 +135,9 @@ class DisplayController extends BaseController
                 $extension['element'],
                 $extension['type'],
                 $extension['version'] ?: 'не визначена',
-                $extension['status'],
+                $extension['target_status'],
+                $extension['migration_status'],
+                $extension['recommendation'],
             ]);
         }
 

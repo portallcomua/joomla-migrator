@@ -294,8 +294,12 @@ if ($selectedStyleId < 1) {
 
         <?php if (!empty($this->report['extensions'])): ?>
             <h3 class="mt-4">Розширення</h3>
-            <table class="table table-bordered table-sm">
-                <thead><tr><th>Назва</th><th>Елемент</th><th>Тип</th><th>Версія</th><th>Статус перенесення</th></tr></thead>
+            <?php if (empty($this->report['target_extensions_checked'])): ?>
+                <div class="alert alert-warning">Не вдалося перевірити, які розширення вже встановлені на цільовому сайті.</div>
+            <?php endif; ?>
+            <div class="table-responsive">
+            <table class="table table-bordered table-sm align-middle">
+                <thead><tr><th>Назва</th><th>Елемент</th><th>Тип</th><th>Версія джерела</th><th>Стан на цілі</th><th>Перенесення даних</th><th>Що робити</th><th>Дія</th></tr></thead>
                 <tbody>
                 <?php foreach ($this->report['extensions'] as $ext): ?>
                     <tr>
@@ -303,11 +307,26 @@ if ($selectedStyleId < 1) {
                         <td><?php echo $escape($ext['element']); ?></td>
                         <td><?php echo $escape($ext['type']); ?></td>
                         <td><?php echo $escape($ext['version'] ?: 'не визначена'); ?></td>
-                        <td><?php echo $escape($ext['status']); ?></td>
+                        <td><?php echo $escape($ext['target_status']); ?></td>
+                        <td><?php echo $escape($ext['migration_status']); ?></td>
+                        <td><?php echo $escape($ext['recommendation']); ?></td>
+                        <td>
+                            <?php if (!empty($ext['can_install']) && !empty($this->report['target_extensions_checked'])): ?>
+                                <a
+                                    class="btn btn-sm btn-outline-primary"
+                                    href="<?php echo \Joomla\CMS\Router\Route::_('index.php?option=com_installer&view=install'); ?>"
+                                >
+                                    Відкрити інсталятор Joomla
+                                </a>
+                            <?php else: ?>
+                                —
+                            <?php endif; ?>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
             </table>
+            </div>
         <?php endif; ?>
     <?php endif; ?>
 </div>

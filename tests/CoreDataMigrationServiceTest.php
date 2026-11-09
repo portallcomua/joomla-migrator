@@ -1,6 +1,7 @@
 <?php
 
 require dirname(__DIR__) . '/com_migrator/admin/src/Service/CoreDataMigrationService.php';
+require dirname(__DIR__) . '/com_migrator/admin/src/Service/ExtensionAssessmentService.php';
 require dirname(__DIR__) . '/com_migrator/admin/src/Service/SourceVersionResolver.php';
 require dirname(__DIR__) . '/com_migrator/admin/src/Service/TargetTemplateService.php';
 
@@ -104,6 +105,30 @@ function assertSameValue($expected, $actual, string $message): void
         throw new RuntimeException($message . ': expected ' . var_export($expected, true) . ', got ' . var_export($actual, true));
     }
 }
+
+$assessmentService = new Migrator\Component\Migrator\Administrator\Service\ExtensionAssessmentService();
+$assessedExtensions = $assessmentService->assess(
+    [
+        ['element' => 'com_content', 'type' => 'component', 'folder' => '', 'enabled' => 1],
+        ['element' => 'com_akeebabackup', 'type' => 'component', 'folder' => '', 'enabled' => 1],
+        ['element' => 'com_k2', 'type' => 'component', 'folder' => '', 'enabled' => 1],
+    ],
+    [
+        ['element' => 'com_content', 'type' => 'component', 'folder' => '', 'enabled' => 1],
+    ]
+);
+assertSameValue('Встановлено й увімкнено', $assessedExtensions[0]['target_status'], 'Detect target core extension');
+assertSameValue(false, $assessedExtensions[0]['can_install'], 'Do not offer installation for target extension');
+assertSameValue(true, $assessedExtensions[1]['can_install'], 'Offer manual installation for missing Akeeba');
+assertSameValue('Дані не переносяться: це розширення резервного копіювання', $assessedExtensions[1]['migration_status'], 'Classify Akeeba data migration');
+assertSameValue(true, str_contains($assessedExtensions[1]['recommendation'], 'Не потрібен для перенесення контенту'), 'Explain Akeeba is optional');
+assertSameValue('Не підтримується: адаптера K2 немає', $assessedExtensions[2]['migration_status'], 'Classify K2 migration support');
+assertSameValue(false, $assessedExtensions[2]['can_install'], 'Do not offer installation for unsupported K2');
+$missingCoreExtension = $assessmentService->assess(
+    [['element' => 'com_users', 'type' => 'component', 'folder' => '', 'enabled' => 1]],
+    []
+);
+assertSameValue(false, $missingCoreExtension[0]['can_install'], 'Do not offer manual installation for a Joomla core extension');
 
 $source = new PDO('sqlite::memory:');
 $source->exec('CREATE TABLE src_usergroups (id INTEGER, parent_id INTEGER, lft INTEGER, rgt INTEGER, title TEXT)');

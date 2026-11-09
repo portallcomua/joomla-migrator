@@ -4,6 +4,7 @@ namespace Migrator\Component\Migrator\Administrator\Model;
 \defined('_JEXEC') or die;
 
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
+use Migrator\Component\Migrator\Administrator\Service\ExtensionAssessmentService;
 use Migrator\Component\Migrator\Administrator\Service\TargetTemplateService;
 
 class AnalyzeModel extends BaseDatabaseModel
@@ -18,6 +19,7 @@ class AnalyzeModel extends BaseDatabaseModel
             'version_family' => '',
             'version_override' => false,
             'target_version' => '',
+            'target_extensions_checked' => false,
             'summary' => [],
             'extensions' => [],
             'module_positions' => [],
@@ -71,6 +73,8 @@ class AnalyzeModel extends BaseDatabaseModel
         }
 
         $connected = false;
+        $targetExtensions = $this->getTargetExtensions();
+        $report['target_extensions_checked'] = $targetExtensions !== null;
 
         try {
             $dsn = "mysql:host={$data['host']};dbname={$data['db']};charset=utf8mb4";
@@ -146,17 +150,31 @@ class AnalyzeModel extends BaseDatabaseModel
                     . "WHERE type IN ('component','module','plugin','template') ORDER BY type, name"
                 );
 
+                $sourceExtensions = [];
+
                 foreach ($stmt->fetchAll() as $ext) {
                     $metadata = json_decode((string) ($ext['manifest_cache'] ?? ''), true);
-                    $report['extensions'][] = [
+                    $sourceExtensions[] = [
                         'name'    => (string) $ext['name'],
                         'element' => (string) $ext['element'],
                         'type'    => (string) $ext['type'],
                         'folder'  => (string) $ext['folder'],
                         'enabled' => (int) $ext['enabled'],
                         'version' => is_array($metadata) ? (string) ($metadata['version'] ?? '') : '',
-                        'status'  => $this->classifyExtension($ext),
                     ];
+                }
+
+                $report['extensions'] = (new ExtensionAssessmentService())->assess(
+                    $sourceExtensions,
+                    $targetExtensions ?? []
+                );
+
+                if ($targetExtensions === null) {
+                    foreach ($report['extensions'] as &$extension) {
+                        $extension['target_status'] = 'Не вдалося перевірити';
+                        $extension['can_install'] = false;
+                    }
+                    unset($extension);
                 }
             }
 
@@ -179,22 +197,15 @@ class AnalyzeModel extends BaseDatabaseModel
         }
     }
 
-    private function classifyExtension(array $ext): string
+    private function getTargetExtensions(): ?array
     {
-        $element = (string) ($ext['element'] ?? '');
+        try {
+            $database = $this->getDatabase();
+            $database->setQuery('SELECT element, type, folder, enabled FROM #__extensions');
 
-        if (in_array($element, ['com_content', 'com_users', 'com_menus', 'com_modules'], true)) {
-            return 'Часткова підтримка: матеріали, категорії, користувачі, меню та mod_custom';
+            return $database->loadAssocList() ?: [];
+        } catch (\Throwable $e) {
+            return null;
         }
-
-        if ($element === 'com_k2') {
-            return 'Перенесення не підтримується: адаптера K2 поки немає';
-        }
-
-        if ($element === 'com_virtuemart') {
-            return 'Перенесення не підтримується: адаптера VirtueMart поки немає';
-        }
-
-        return 'Не перевірено: потрібен маніфест розширення та правило сумісності';
     }
 }
