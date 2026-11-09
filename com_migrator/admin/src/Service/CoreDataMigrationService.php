@@ -21,6 +21,7 @@ class CoreDataMigrationService
             'users' => 0,
             'memberships' => 0,
             'categories' => 0,
+            'languages' => 0,
             'articles' => 0,
             'featured_articles' => 0,
             'menu_types' => 0,
@@ -39,6 +40,7 @@ class CoreDataMigrationService
             $this->migrateUsers($source, $sourcePrefix, $target, $migrationId, $result);
             $this->migrateMemberships($source, $sourcePrefix, $target, $migrationId, $result);
             $this->migrateCategories($source, $sourcePrefix, $target, $migrationId, $result);
+            $this->migrateContentLanguages($source, $sourcePrefix, $target, $result);
             $this->migrateArticles($source, $sourcePrefix, $target, $migrationId, $result);
             if (($versionProfile['effective_family'] ?? '') === '2.5') {
                 $this->migrateFeaturedArticles($source, $sourcePrefix, $target, $migrationId, $result);
@@ -296,6 +298,49 @@ class CoreDataMigrationService
         } catch (\Throwable $e) {
             $target->transactionRollback();
             $result['memberships'] = $initialCount;
+            throw $e;
+        }
+    }
+
+    private function migrateContentLanguages(\PDO $source, string $prefix, $target, array &$result): void
+    {
+        try {
+            $rows = $source->query("SELECT * FROM `{$prefix}languages` ORDER BY ordering, lang_id");
+        } catch (\PDOException $e) {
+            return;
+        }
+
+        $targetColumns = $this->getColumns($target, '#__languages');
+        $initialCount = $result['languages'];
+        $target->transactionStart();
+
+        try {
+            while ($language = $rows->fetch(\PDO::FETCH_ASSOC)) {
+                $languageCode = trim((string) ($language['lang_code'] ?? ''));
+
+                if ($languageCode === '') {
+                    continue;
+                }
+
+                $target->setQuery(
+                    'SELECT lang_id FROM #__languages WHERE lang_code = ' . $target->quote($languageCode) . ' LIMIT 1'
+                );
+
+                if ($target->loadResult() !== null) {
+                    continue;
+                }
+
+                unset($language['lang_id'], $language['id']);
+                $language = array_intersect_key($language, $targetColumns);
+                $languageObject = (object) $language;
+                $target->insertObject('#__languages', $languageObject, 'lang_id');
+                $result['languages']++;
+            }
+
+            $target->transactionCommit();
+        } catch (\Throwable $e) {
+            $target->transactionRollback();
+            $result['languages'] = $initialCount;
             throw $e;
         }
     }

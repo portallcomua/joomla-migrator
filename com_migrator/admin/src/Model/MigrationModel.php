@@ -5,6 +5,7 @@ namespace Migrator\Component\Migrator\Administrator\Model;
 
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Migrator\Component\Migrator\Administrator\Service\CoreDataMigrationService;
+use Migrator\Component\Migrator\Administrator\Service\LanguageOverrideMigrationService;
 use Migrator\Component\Migrator\Administrator\Service\MediaCopyService;
 use Migrator\Component\Migrator\Administrator\Service\SourceVersionResolver;
 use Migrator\Component\Migrator\Administrator\Service\TargetTemplateService;
@@ -159,6 +160,38 @@ class MigrationModel extends BaseDatabaseModel
         $service = new MediaCopyService();
 
         return $service->copyImages(JPATH_ROOT, $sourceRoot);
+    }
+
+    public function copyLanguageOverrides(string $sourceRelativePath): array
+    {
+        $sourceRelativePath = trim($sourceRelativePath);
+
+        if ($sourceRelativePath === '' || $sourceRelativePath[0] === '/' || $sourceRelativePath[0] === '\\'
+            || preg_match('/\A[A-Za-z]:/', $sourceRelativePath)) {
+            return [
+                'success' => false,
+                'copied' => 0,
+                'identical' => 0,
+                'conflicts' => [],
+                'errors' => ['Вкажіть відносний шлях до кореня старого сайту.'],
+                'skipped_symlinks' => 0,
+            ];
+        }
+
+        $sourceRoot = realpath(JPATH_ROOT . DIRECTORY_SEPARATOR . $sourceRelativePath);
+
+        if ($sourceRoot === false) {
+            return [
+                'success' => false,
+                'copied' => 0,
+                'identical' => 0,
+                'conflicts' => [],
+                'errors' => ['Не вдалося знайти старий сайт за вказаним шляхом.'],
+                'skipped_symlinks' => 0,
+            ];
+        }
+
+        return (new LanguageOverrideMigrationService())->copyOverrides(JPATH_ROOT, $sourceRoot);
     }
 
     private function migrationError(string $message): array

@@ -159,6 +159,7 @@ if ($selectedStyleId < 1) {
             користувачів: <?php echo (int) $this->migrationReport['users']; ?>;
             зв’язків із групами: <?php echo (int) $this->migrationReport['memberships']; ?>;
             категорій: <?php echo (int) $this->migrationReport['categories']; ?>;
+            мов контенту: <?php echo (int) ($this->migrationReport['languages'] ?? 0); ?>;
             матеріалів: <?php echo (int) $this->migrationReport['articles']; ?>;
             featured: <?php echo (int) $this->migrationReport['featured_articles']; ?>;
             типів меню: <?php echo (int) $this->migrationReport['menu_types']; ?>;
@@ -187,6 +188,27 @@ if ($selectedStyleId < 1) {
         <?php foreach ($this->migrationReport['errors'] as $error): ?>
             <div class="alert alert-danger"><?php echo $escape($error); ?></div>
         <?php endforeach; ?>
+        <?php if (!empty($this->languageOverrideReport)): ?>
+            <div class="alert <?php echo $this->languageOverrideReport['success'] ? 'alert-success' : 'alert-warning'; ?>">
+                Власні переклади: скопійовано <?php echo (int) $this->languageOverrideReport['copied']; ?>;
+                уже однакових <?php echo (int) $this->languageOverrideReport['identical']; ?>;
+                конфліктів без перезапису <?php echo count($this->languageOverrideReport['conflicts']); ?>;
+                пропущено symlink <?php echo (int) $this->languageOverrideReport['skipped_symlinks']; ?>.
+            </div>
+            <?php if (!empty($this->languageOverrideReport['conflicts'])): ?>
+                <div class="alert alert-warning">
+                    Ці override-файли вже існують і не перезаписані:
+                    <ul class="mb-0">
+                        <?php foreach ($this->languageOverrideReport['conflicts'] as $path): ?>
+                            <li><?php echo $escape($path); ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            <?php endif; ?>
+            <?php foreach ($this->languageOverrideReport['errors'] as $error): ?>
+                <div class="alert alert-danger"><?php echo $escape($error); ?></div>
+            <?php endforeach; ?>
+        <?php endif; ?>
     <?php endif; ?>
 
     <hr>
@@ -299,22 +321,42 @@ if ($selectedStyleId < 1) {
             <?php endif; ?>
             <div class="table-responsive">
             <table class="table table-bordered table-sm align-middle">
-                <thead><tr><th>Назва</th><th>Елемент</th><th>Тип</th><th>Версія джерела</th><th>Стан на цілі</th><th>Перенесення даних</th><th>Що робити</th><th>Дія</th></tr></thead>
+                <thead><tr><th>Назва</th><th>Елемент</th><th>Тип</th><th>Клієнт</th><th>Версія джерела</th><th>Стан на цілі</th><th>Перенесення даних</th><th>Що робити</th><th>Дія</th></tr></thead>
                 <tbody>
                 <?php foreach ($this->report['extensions'] as $ext): ?>
                     <tr>
-                        <td><?php echo $escape($ext['name']); ?></td>
+                        <td>
+                            <?php if ($ext['type'] === 'component' && str_starts_with($ext['element'], 'com_') && $ext['target_status'] !== 'Не встановлено на цільовому сайті' && $ext['target_status'] !== 'Не вдалося перевірити'): ?>
+                                <a href="<?php echo \Joomla\CMS\Router\Route::_('index.php?option=' . rawurlencode($ext['element'])); ?>" target="_blank" rel="noopener noreferrer">
+                                    <?php echo $escape($ext['name']); ?>
+                                </a>
+                            <?php else: ?>
+                                <?php echo $escape($ext['name']); ?>
+                            <?php endif; ?>
+                        </td>
                         <td><?php echo $escape($ext['element']); ?></td>
                         <td><?php echo $escape($ext['type']); ?></td>
+                        <td><?php echo $ext['type'] === 'language' ? ((int) $ext['client_id'] === 1 ? 'Адміністратор' : 'Сайт') : '—'; ?></td>
                         <td><?php echo $escape($ext['version'] ?: 'не визначена'); ?></td>
                         <td><?php echo $escape($ext['target_status']); ?></td>
                         <td><?php echo $escape($ext['migration_status']); ?></td>
                         <td><?php echo $escape($ext['recommendation']); ?></td>
                         <td>
-                            <?php if (!empty($ext['can_install']) && !empty($this->report['target_extensions_checked'])): ?>
+                            <?php if ($ext['type'] === 'language' && $ext['target_status'] === 'Не встановлено на цільовому сайті'): ?>
+                                <a
+                                    class="btn btn-sm btn-outline-primary"
+                                    href="<?php echo \Joomla\CMS\Router\Route::_('index.php?option=com_installer&view=languages'); ?>"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    Встановити мову Joomla
+                                </a>
+                            <?php elseif (!empty($ext['can_install']) && !empty($this->report['target_extensions_checked'])): ?>
                                 <a
                                     class="btn btn-sm btn-outline-primary"
                                     href="<?php echo \Joomla\CMS\Router\Route::_('index.php?option=com_installer&view=install'); ?>"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                 >
                                     Відкрити інсталятор Joomla
                                 </a>

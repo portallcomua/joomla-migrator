@@ -2,6 +2,7 @@
 
 require dirname(__DIR__) . '/com_migrator/admin/src/Service/CoreDataMigrationService.php';
 require dirname(__DIR__) . '/com_migrator/admin/src/Service/ExtensionAssessmentService.php';
+require dirname(__DIR__) . '/com_migrator/admin/src/Service/LanguageOverrideMigrationService.php';
 require dirname(__DIR__) . '/com_migrator/admin/src/Service/SourceVersionResolver.php';
 require dirname(__DIR__) . '/com_migrator/admin/src/Service/TargetTemplateService.php';
 
@@ -110,6 +111,7 @@ $assessmentService = new Migrator\Component\Migrator\Administrator\Service\Exten
 $assessedExtensions = $assessmentService->assess(
     [
         ['element' => 'com_content', 'type' => 'component', 'folder' => '', 'enabled' => 1],
+        ['element' => 'com_categories', 'type' => 'component', 'folder' => '', 'enabled' => 1],
         ['element' => 'com_akeebabackup', 'type' => 'component', 'folder' => '', 'enabled' => 1],
         ['element' => 'com_k2', 'type' => 'component', 'folder' => '', 'enabled' => 1],
     ],
@@ -119,16 +121,28 @@ $assessedExtensions = $assessmentService->assess(
 );
 assertSameValue('Встановлено й увімкнено', $assessedExtensions[0]['target_status'], 'Detect target core extension');
 assertSameValue(false, $assessedExtensions[0]['can_install'], 'Do not offer installation for target extension');
-assertSameValue(true, $assessedExtensions[1]['can_install'], 'Offer manual installation for missing Akeeba');
-assertSameValue('Дані не переносяться: це розширення резервного копіювання', $assessedExtensions[1]['migration_status'], 'Classify Akeeba data migration');
-assertSameValue(true, str_contains($assessedExtensions[1]['recommendation'], 'Не потрібен для перенесення контенту'), 'Explain Akeeba is optional');
-assertSameValue('Не підтримується: адаптера K2 немає', $assessedExtensions[2]['migration_status'], 'Classify K2 migration support');
-assertSameValue(false, $assessedExtensions[2]['can_install'], 'Do not offer installation for unsupported K2');
+assertSameValue(false, $assessedExtensions[1]['can_install'], 'Do not offer manual installation for missing core categories');
+assertSameValue('Частково: переносяться матеріали, категорії, користувачі, меню та mod_custom', $assessedExtensions[1]['migration_status'], 'Classify core category migration');
+assertSameValue(true, $assessedExtensions[2]['can_install'], 'Offer manual installation for missing Akeeba');
+assertSameValue('Дані не переносяться: це розширення резервного копіювання', $assessedExtensions[2]['migration_status'], 'Classify Akeeba data migration');
+assertSameValue(true, str_contains($assessedExtensions[2]['recommendation'], 'Не потрібен для перенесення контенту'), 'Explain Akeeba is optional');
+assertSameValue('Не підтримується: адаптера K2 немає', $assessedExtensions[3]['migration_status'], 'Classify K2 migration support');
+assertSameValue(false, $assessedExtensions[3]['can_install'], 'Do not offer installation for unsupported K2');
 $missingCoreExtension = $assessmentService->assess(
     [['element' => 'com_users', 'type' => 'component', 'folder' => '', 'enabled' => 1]],
     []
 );
 assertSameValue(false, $missingCoreExtension[0]['can_install'], 'Do not offer manual installation for a Joomla core extension');
+$assessedLanguages = $assessmentService->assess(
+    [
+        ['element' => 'uk-UA', 'type' => 'language', 'folder' => '', 'client_id' => 0, 'enabled' => 1],
+        ['element' => 'uk-UA', 'type' => 'language', 'folder' => '', 'client_id' => 1, 'enabled' => 1],
+    ],
+    [['element' => 'uk-UA', 'type' => 'language', 'folder' => '', 'client_id' => 0, 'enabled' => 1]]
+);
+assertSameValue('Встановлено й увімкнено', $assessedLanguages[0]['target_status'], 'Detect installed site language pack');
+assertSameValue('Не встановлено на цільовому сайті', $assessedLanguages[1]['target_status'], 'Detect missing administrator language pack');
+assertSameValue(false, $assessedLanguages[1]['can_install'], 'Use Joomla language manager for language packs');
 
 $source = new PDO('sqlite::memory:');
 $source->exec('CREATE TABLE src_usergroups (id INTEGER, parent_id INTEGER, lft INTEGER, rgt INTEGER, title TEXT)');
@@ -139,6 +153,8 @@ $source->exec('CREATE TABLE src_user_usergroup_map (user_id INTEGER, group_id IN
 $source->exec('INSERT INTO src_user_usergroup_map VALUES (5,2)');
 $source->exec('CREATE TABLE src_categories (id INTEGER, parent_id INTEGER, lft INTEGER, rgt INTEGER, extension TEXT, title TEXT, alias TEXT, description TEXT, published INTEGER, access INTEGER, params TEXT, metadesc TEXT, metakey TEXT, metadata TEXT, language TEXT, version INTEGER)');
 $source->exec("INSERT INTO src_categories VALUES (2,1,1,4,'com_content','News','news','',1,1,'{}','category desc','cat key','{}','*',1),(3,2,2,3,'com_content','Local','local','',1,1,'{}','','','{}','*',1)");
+$source->exec('CREATE TABLE src_languages (lang_id INTEGER, lang_code TEXT, title TEXT, title_native TEXT, sef TEXT, image TEXT, description TEXT, metakey TEXT, metadesc TEXT, sitename TEXT, published INTEGER, access INTEGER, ordering INTEGER, params TEXT)');
+$source->exec("INSERT INTO src_languages VALUES (1,'en-GB','English','English','en','en_gb','English','','','',1,1,1,'{}'),(2,'uk-UA','Ukrainian','Українська','uk','uk_ua','Ukrainian','','','',1,1,2,'{}')");
 $source->exec('CREATE TABLE src_content (id INTEGER, catid INTEGER, title TEXT, alias TEXT, introtext TEXT, fulltext TEXT, metadesc TEXT, metakey TEXT, created_by INTEGER, modified_by INTEGER, created TEXT, modified TEXT, state INTEGER, images TEXT, urls TEXT, attribs TEXT, metadata TEXT, language TEXT, access INTEGER)');
 $source->exec("INSERT INTO src_content VALUES (17,3,'Story','story','intro','body','article desc','article key',5,5,'2020-01-01','2020-01-02',1,'{\"image_intro\":\"images/detail/image.png\"}','{}','{}','{}','*',1)");
 $source->exec('CREATE TABLE src_content_frontpage (content_id INTEGER, ordering INTEGER)');
@@ -161,6 +177,8 @@ $targetPdo->exec('CREATE TABLE j_users (id INTEGER PRIMARY KEY AUTOINCREMENT, na
 $targetPdo->exec('CREATE TABLE j_user_usergroup_map (user_id INTEGER, group_id INTEGER, UNIQUE(user_id, group_id))');
 $targetPdo->exec('CREATE TABLE j_categories (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER, lft INTEGER, rgt INTEGER, level INTEGER, path TEXT, extension TEXT, title TEXT, alias TEXT, description TEXT, published INTEGER, access INTEGER, params TEXT, metadesc TEXT, metakey TEXT, metadata TEXT, language TEXT, version INTEGER)');
 $targetPdo->exec("INSERT INTO j_categories VALUES (1,0,0,5,0,'','system','ROOT','root','',1,1,'{}','','','{}','*',1),(2,1,1,2,1,'uncategorised','com_content','Uncategorised','uncategorised','',1,1,'{}','','','{}','*',1)");
+$targetPdo->exec('CREATE TABLE j_languages (lang_id INTEGER PRIMARY KEY AUTOINCREMENT, lang_code TEXT UNIQUE, title TEXT, title_native TEXT, sef TEXT, image TEXT, description TEXT, metakey TEXT, metadesc TEXT, sitename TEXT, published INTEGER, access INTEGER, ordering INTEGER, params TEXT)');
+$targetPdo->exec("INSERT INTO j_languages (lang_code,title,title_native,sef,image,description,published,access,ordering,params) VALUES ('en-GB','English','English','en','en_gb','English',1,1,1,'{}')");
 $targetPdo->exec('CREATE TABLE j_content (id INTEGER PRIMARY KEY AUTOINCREMENT, catid INTEGER, title TEXT, alias TEXT, introtext TEXT, fulltext TEXT, metadesc TEXT, metakey TEXT, created_by INTEGER, modified_by INTEGER, created TEXT, modified TEXT, state INTEGER, images TEXT, urls TEXT, attribs TEXT, metadata TEXT, language TEXT, access INTEGER, featured INTEGER)');
 $targetPdo->exec('CREATE TABLE j_content_frontpage (content_id INTEGER, ordering INTEGER, UNIQUE(content_id))');
 $targetPdo->exec('CREATE TABLE j_menu_types (id INTEGER PRIMARY KEY AUTOINCREMENT, menutype TEXT UNIQUE, title TEXT, description TEXT)');
@@ -182,6 +200,7 @@ assertSameValue(1, $first['usergroups'], 'Imported user groups');
 assertSameValue(1, $first['users'], 'Imported users');
 assertSameValue(1, $first['memberships'], 'Imported group memberships');
 assertSameValue(2, $first['categories'], 'Imported categories');
+assertSameValue(1, $first['languages'], 'Imported missing content language');
 assertSameValue(1, $first['articles'], 'Imported articles');
 assertSameValue(1, $first['featured_articles'], 'Imported featured articles');
 assertSameValue(1, $first['menu_items'], 'Imported menu items');
@@ -201,6 +220,7 @@ $assignment = $targetPdo->query('SELECT * FROM j_modules_menu')->fetch(PDO::FETC
 assertSameValue('story', $article['alias'], 'Article alias');
 assertSameValue('article desc', $article['metadesc'], 'Article metadata');
 assertSameValue((int) $newsCategory['id'], (int) $localCategory['parent_id'], 'Nested category parent mapping');
+assertSameValue(2, (int) $targetPdo->query('SELECT COUNT(*) FROM j_languages')->fetchColumn(), 'Preserve existing and add donor content language');
 assertSameValue('news/local', $localCategory['path'], 'Nested category path');
 assertSameValue('{"image_intro":"images/detail/image.png"}', $article['images'], 'Article image path');
 assertSameValue((int) $user['id'], (int) $article['created_by'], 'Article author mapping');
@@ -274,6 +294,25 @@ assertSameValue('shaper_helixultimate', $templateStyles[0]['template'], 'Detecte
 assertSameValue(['left', 'right', 'footer1'], $templateStyles[0]['positions'], 'Read target template positions');
 $templateService->setDefaultStyle($target, 9);
 assertSameValue(1, (int) $targetPdo->query('SELECT home FROM j_template_styles WHERE id = 9')->fetchColumn(), 'Set default template style');
+
+mkdir($oldRoot . '/language/overrides', 0755, true);
+mkdir($oldRoot . '/administrator/language/overrides', 0755, true);
+mkdir($newRoot . '/language/overrides', 0755, true);
+file_put_contents($oldRoot . '/language/overrides/uk-UA.override.ini', 'CUSTOM="value"');
+file_put_contents($oldRoot . '/administrator/language/overrides/uk-UA.override.ini', 'ADMIN="value"');
+file_put_contents($oldRoot . '/language/overrides/en-GB.override.ini', 'SOURCE="value"');
+file_put_contents($newRoot . '/language/overrides/en-GB.override.ini', 'TARGET="value"');
+@symlink('/etc/passwd', $oldRoot . '/language/overrides/xx-XX.override.ini');
+$overrideService = new Migrator\Component\Migrator\Administrator\Service\LanguageOverrideMigrationService();
+$overrideReport = $overrideService->copyOverrides($newRoot, $oldRoot);
+assertSameValue(true, $overrideReport['success'], 'Language override copy status');
+assertSameValue(2, $overrideReport['copied'], 'Copy site and administrator language overrides');
+assertSameValue(1, count($overrideReport['conflicts']), 'Do not overwrite conflicting language override');
+assertSameValue(1, $overrideReport['skipped_symlinks'], 'Skip symlinked language override');
+assertSameValue('CUSTOM="value"', file_get_contents($newRoot . '/language/overrides/uk-UA.override.ini'), 'Copy custom language override');
+$repeatOverrideReport = $overrideService->copyOverrides($newRoot, $oldRoot);
+assertSameValue(0, $repeatOverrideReport['copied'], 'Language override copy is repeatable');
+assertSameValue(2, $repeatOverrideReport['identical'], 'Skip identical language overrides');
 
 $cleanup = function ($path) use (&$cleanup) {
     if (is_link($path) || !is_dir($path)) {

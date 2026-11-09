@@ -79,6 +79,7 @@ class DisplayController extends BaseController
         $summaryLabels = [
             'content' => 'Матеріали',
             'categories' => 'Категорії',
+            'languages' => 'Мови контенту',
             'users' => 'Користувачі',
             'user_usergroup_map' => 'Зв’язки користувачів із групами',
             'usergroups' => 'Групи користувачів',
@@ -126,7 +127,7 @@ class DisplayController extends BaseController
             $writeRow(['Шаблон', $targetPosition, '']);
         }
 
-        $writeRow(['Розширення', 'Назва', 'Елемент', 'Тип', 'Версія джерела', 'Стан на цілі', 'Перенесення даних', 'Рекомендація']);
+        $writeRow(['Розширення', 'Назва', 'Елемент', 'Тип', 'Клієнт', 'Версія джерела', 'Стан на цілі', 'Перенесення даних', 'Рекомендація']);
 
         foreach (($report['extensions'] ?? []) as $extension) {
             $writeRow([
@@ -134,6 +135,7 @@ class DisplayController extends BaseController
                 $extension['name'],
                 $extension['element'],
                 $extension['type'],
+                $extension['type'] === 'language' ? ((int) $extension['client_id'] === 1 ? 'Адміністратор' : 'Сайт') : '',
                 $extension['version'] ?: 'не визначена',
                 $extension['target_status'],
                 $extension['migration_status'],
@@ -225,11 +227,15 @@ class DisplayController extends BaseController
         $model = $this->getModel('Migration', 'Administrator');
         $migrationReport = $model->importCore($data);
         $mediaReport = $model->copyMedia($input->getString('old_root', '..'));
+        $languageOverrideReport = $migrationReport['success']
+            ? $model->copyLanguageOverrides($input->getString('old_root', '..'))
+            : null;
 
         $view = $this->getView('Dashboard', 'html');
         $view->report = null;
         $view->mediaReport = $mediaReport;
         $view->migrationReport = $migrationReport;
+        $view->languageOverrideReport = $languageOverrideReport;
         $view->analysisData = $data;
         unset($view->analysisData['pass'], $view->analysisData['module_position_map'], $view->analysisData['set_template_default']);
         $this->setTemplateOptions($view);

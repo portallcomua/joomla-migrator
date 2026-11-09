@@ -10,6 +10,7 @@ class HtmlView extends BaseHtmlView
     public $report = null;
     public $mediaReport = null;
     public $migrationReport = null;
+    public $languageOverrideReport = null;
     public $templateOptions = [];
     public $analysisData = [];
 

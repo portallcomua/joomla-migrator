@@ -16,13 +16,13 @@ class ExtensionAssessmentService
             $extension['target_status'] = $target === null
                 ? 'Не встановлено на цільовому сайті'
                 : ((int) ($target['enabled'] ?? 0) === 1 ? 'Встановлено й увімкнено' : 'Встановлено, вимкнено');
-            $extension['migration_status'] = $this->migrationStatus((string) $extension['element']);
-            $extension['recommendation'] = $this->recommendation((string) $extension['element'], $target !== null);
+            $extension['migration_status'] = $this->migrationStatus($extension);
+            $extension['recommendation'] = $this->recommendation($extension, $target !== null);
             $extension['can_install'] = $target === null && !in_array(
                 (string) $extension['element'],
-                ['com_content', 'com_users', 'com_menus', 'com_modules', 'mod_custom', 'com_k2', 'com_virtuemart'],
+                ['com_content', 'com_categories', 'com_users', 'com_menus', 'com_modules', 'mod_custom', 'com_k2', 'com_virtuemart'],
                 true
-            );
+            ) && (string) ($extension['type'] ?? '') !== 'language';
         }
         unset($extension);
 
@@ -33,13 +33,20 @@ class ExtensionAssessmentService
     {
         return strtolower((string) ($extension['type'] ?? '')) . "\0"
             . strtolower((string) ($extension['folder'] ?? '')) . "\0"
+            . (string) ((int) ($extension['client_id'] ?? 0)) . "\0"
             . strtolower((string) ($extension['element'] ?? ''));
     }
 
-    private function migrationStatus(string $element): string
+    private function migrationStatus(array $extension): string
     {
-        if (in_array($element, ['com_content', 'com_users', 'com_menus', 'com_modules', 'mod_custom'], true)) {
-            return 'Частково: переносяться лише дані ядра та mod_custom';
+        $element = (string) ($extension['element'] ?? '');
+
+        if (($extension['type'] ?? '') === 'language') {
+            return 'Пакет має відповідати Joomla 6.2; власні переклади переносяться окремо';
+        }
+
+        if (in_array($element, ['com_content', 'com_categories', 'com_users', 'com_menus', 'com_modules', 'mod_custom'], true)) {
+            return 'Частково: переносяться матеріали, категорії, користувачі, меню та mod_custom';
         }
 
         if ($element === 'com_k2') {
@@ -57,8 +64,16 @@ class ExtensionAssessmentService
         return 'Не перевірено: міграція даних цього розширення не реалізована';
     }
 
-    private function recommendation(string $element, bool $installedOnTarget): string
+    private function recommendation(array $extension, bool $installedOnTarget): string
     {
+        $element = (string) ($extension['element'] ?? '');
+
+        if (($extension['type'] ?? '') === 'language') {
+            return $installedOnTarget
+                ? 'Мовний пакет уже є на цільовому сайті. Переконайтеся, що він увімкнений.'
+                : 'Встановіть сумісний пакет для Joomla 6.2 через Система → Встановлення → Мови.';
+        }
+
         if ($element === 'com_akeebabackup') {
             return $installedOnTarget
                 ? 'Не потрібен для перенесення контенту. Перевірте, чи встановлена версія сумісна з Joomla 6.2.'
@@ -73,7 +88,7 @@ class ExtensionAssessmentService
             return 'Товари, замовлення та інші дані VirtueMart не переносяться. Потрібен окремий мігратор, сумісний із цільовою Joomla.';
         }
 
-        if (in_array($element, ['com_content', 'com_users', 'com_menus', 'com_modules', 'mod_custom'], true)) {
+        if (in_array($element, ['com_content', 'com_categories', 'com_users', 'com_menus', 'com_modules', 'mod_custom'], true)) {
             return 'Не встановлюйте окремо: це розширення ядра Joomla. Перевірте примітки про часткову підтримку.';
         }
 

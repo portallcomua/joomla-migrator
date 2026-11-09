@@ -88,7 +88,7 @@ class AnalyzeModel extends BaseDatabaseModel
             $p = $data['prefix'];
 
             $tables = [
-                'content', 'categories', 'users', 'user_usergroup_map', 'usergroups',
+                'content', 'categories', 'languages', 'users', 'user_usergroup_map', 'usergroups',
                 'menu', 'modules', 'extensions', 'assets', 'fields', 'fields_values',
                 'redirect_links', 'schemas', 'banners', 'contacts', 'weblinks', 'tags',
                 'contentitem_tag_map', 'content_frontpage', 'k2_items', 'k2_categories',
@@ -146,8 +146,8 @@ class AnalyzeModel extends BaseDatabaseModel
 
             if ($report['summary']['extensions'] !== null) {
                 $stmt = $pdo->query(
-                    "SELECT name, element, type, folder, enabled, manifest_cache FROM `{$p}extensions` "
-                    . "WHERE type IN ('component','module','plugin','template') ORDER BY type, name"
+                    "SELECT name, element, type, folder, client_id, enabled, manifest_cache FROM `{$p}extensions` "
+                    . "WHERE type IN ('component','module','plugin','template','language') ORDER BY type, name, client_id"
                 );
 
                 $sourceExtensions = [];
@@ -159,6 +159,7 @@ class AnalyzeModel extends BaseDatabaseModel
                         'element' => (string) $ext['element'],
                         'type'    => (string) $ext['type'],
                         'folder'  => (string) $ext['folder'],
+                        'client_id' => (int) $ext['client_id'],
                         'enabled' => (int) $ext['enabled'],
                         'version' => is_array($metadata) ? (string) ($metadata['version'] ?? '') : '',
                     ];
@@ -201,7 +202,7 @@ class AnalyzeModel extends BaseDatabaseModel
     {
         try {
             $database = $this->getDatabase();
-            $database->setQuery('SELECT element, type, folder, enabled FROM #__extensions');
+            $database->setQuery('SELECT element, type, folder, client_id, enabled FROM #__extensions');
 
             return $database->loadAssocList() ?: [];
         } catch (\Throwable $e) {

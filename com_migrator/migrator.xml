@@ -3,7 +3,7 @@
     <name>com_migrator</name>
     <author>Joomla Migrator</author>
     <creationDate>2024</creationDate>
-    <version>0.9.0</version>
+    <version>0.9.1</version>
     <description>Аналіз Joomla та перенесення основних даних і медіафайлів</description>
     
     <namespace path="src">Migrator\Component\Migrator</namespace>
