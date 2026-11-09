@@ -1,6 +1,8 @@
 <?php
 namespace Migrator\Component\Migrator\Administrator\Model;
 
+\defined('_JEXEC') or die;
+
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
 class AnalyzeModel extends BaseDatabaseModel
@@ -56,10 +58,10 @@ class AnalyzeModel extends BaseDatabaseModel
     private function classifyExtension(array $ext): string
     {
         $el = $ext['element'];
-        if (strpos($el, 'com_content') === 0) return '✅ основний контент, підтримується';
-        if (strpos($el, 'com_users') === 0) return '✅ основний контент, підтримується';
-        if (strpos($el, 'com_menus') === 0) return '✅ основний контент, підтримується';
-        if (strpos($el, 'com_modules') === 0) return '✅ основний контент, підтримується';
+        if (strpos($el, 'com_content') === 0) return '✅ основний контент';
+        if (strpos($el, 'com_users') === 0) return '✅ основний контент';
+        if (strpos($el, 'com_menus') === 0) return '✅ основний контент';
+        if (strpos($el, 'com_modules') === 0) return '✅ основний контент';
         if (strpos($el, 'com_k2') === 0) return '❌ K2 не підтримується, рекомендовано Migrate K2 Pro';
         if (strpos($el, 'com_virtuemart') === 0) return '⚠️ VirtueMart потребує адаптера';
         if (strpos($el, 'com_kunena') === 0) return '⚠️ Kunena потребує адаптера';
