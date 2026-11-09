@@ -1,19 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <extension type="component" method="upgrade">
     <name>com_migrator</name>
-    <author>Your Name</author>
+    <author>Joomla Migrator</author>
     <creationDate>2024</creationDate>
-    <version>0.2.2</version>
-    <description>Інструмент міграції</description>
+    <version>0.7.0</version>
+    <description>Аналіз Joomla та перенесення основних даних і медіафайлів</description>
     
     <namespace path="src">Migrator\Component\Migrator</namespace>
     
     <administration>
-        <menu img="class:generic">Мігратор Joomla</menu>
+        <menu img="class:generic">COM_MIGRATOR</menu>
         <files folder="admin">
             <filename>migrator.php</filename>
+            <folder>services</folder>
             <folder>src</folder>
-            <folder>language</folder>
         </files>
+        <languages folder="admin/language">
+            <language tag="en-GB">en-GB/com_migrator.ini</language>
+            <language tag="en-GB">en-GB/com_migrator.sys.ini</language>
+        </languages>
     </administration>
 </extension>

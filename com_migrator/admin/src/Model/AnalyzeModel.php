@@ -12,44 +12,123 @@ class AnalyzeModel extends BaseDatabaseModel
         $report = [
             'success' => false,
             'error'   => '',
+            'version' => '',
+            'version_source' => '',
+            'version_family' => '',
+            'version_override' => false,
+            'target_version' => '',
             'summary' => [],
             'extensions' => [],
         ];
+
+        try {
+            $report['target_version'] = (new \Joomla\CMS\Version())->getShortVersion();
+        } catch (\Throwable $e) {
+            $report['target_version'] = 'Не вдалося визначити';
+        }
+
+        foreach (['host', 'db', 'user', 'prefix'] as $key) {
+            if (!isset($data[$key]) || trim((string) $data[$key]) === '') {
+                $report['error'] = 'Заповніть усі обов’язкові поля підключення.';
+
+                return $report;
+            }
+        }
+
+        if (!preg_match('/\A[A-Za-z0-9_]+\z/', $data['prefix'])) {
+            $report['error'] = 'Префікс таблиць містить неприпустимі символи.';
+
+            return $report;
+        }
+
+        if (!preg_match('/\A[A-Za-z0-9._:-]+\z/', $data['host'])
+            || !preg_match('/\A[A-Za-z0-9_$-]+\z/', $data['db'])) {
+            $report['error'] = 'Хост або назва бази даних мають неприпустимий формат.';
+
+            return $report;
+        }
+
+        $connected = false;
 
         try {
             $dsn = "mysql:host={$data['host']};dbname={$data['db']};charset=utf8mb4";
             $pdo = new \PDO($dsn, $data['user'], $data['pass'], [
                 \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
                 \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+                \PDO::ATTR_EMULATE_PREPARES => false,
             ]);
+            $connected = true;
 
             $p = $data['prefix'];
 
-            $tables = ['content', 'categories', 'users', 'menu', 'modules'];
+            $tables = [
+                'content', 'categories', 'users', 'user_usergroup_map', 'usergroups',
+                'menu', 'modules', 'extensions', 'assets', 'fields', 'fields_values',
+                'redirect_links', 'schemas', 'banners', 'contacts', 'weblinks', 'tags',
+                'contentitem_tag_map', 'content_frontpage', 'k2_items', 'k2_categories',
+                'virtuemart_products', 'virtuemart_categories', 'virtuemart_orders',
+            ];
+
             foreach ($tables as $t) {
-                try {
-                    $stmt = $pdo->query("SELECT COUNT(*) AS c FROM {$p}{$t}");
-                    $report['summary'][$t] = (int) $stmt->fetch()['c'];
-                } catch (\Exception $e) {
-                    $report['summary'][$t] = 'таблиця не існує';
+                $exists = $pdo->prepare(
+                    'SELECT COUNT(*) FROM information_schema.tables '
+                    . 'WHERE table_schema = DATABASE() AND table_name = ?'
+                );
+                $exists->execute([$p . $t]);
+
+                if (!(int) $exists->fetchColumn()) {
+                    $report['summary'][$t] = null;
+
+                    continue;
+                }
+
+                $stmt = $pdo->query("SELECT COUNT(*) AS c FROM `{$p}{$t}`");
+                $report['summary'][$t] = (int) $stmt->fetch()['c'];
+            }
+
+            if ($report['summary']['modules'] !== null) {
+                $stmt = $pdo->query("SELECT COUNT(*) FROM `{$p}modules` WHERE module = 'mod_custom'");
+                $report['summary']['custom_html_modules'] = (int) $stmt->fetchColumn();
+            } else {
+                $report['summary']['custom_html_modules'] = null;
+            }
+
+            $versionProfile = (new \Migrator\Component\Migrator\Administrator\Service\SourceVersionResolver())
+                ->resolve($pdo, $p, (string) ($data['old_root'] ?? '..'), (string) ($data['version_override'] ?? 'auto'));
+            $report['version'] = $versionProfile['detected_version'] !== ''
+                ? $versionProfile['detected_version']
+                : 'Не визначено автоматично';
+            $report['version_family'] = $versionProfile['effective_family'];
+            $report['version_override'] = $versionProfile['is_manual_override'];
+            $report['version_source'] = $versionProfile['is_manual_override']
+                ? 'ручний резервний вибір'
+                : $versionProfile['version_source'];
+
+            if ($report['summary']['extensions'] !== null) {
+                $stmt = $pdo->query(
+                    "SELECT name, element, type, folder, enabled, manifest_cache FROM `{$p}extensions` "
+                    . "WHERE type IN ('component','module','plugin','template') ORDER BY type, name"
+                );
+
+                foreach ($stmt->fetchAll() as $ext) {
+                    $metadata = json_decode((string) ($ext['manifest_cache'] ?? ''), true);
+                    $report['extensions'][] = [
+                        'name'    => (string) $ext['name'],
+                        'element' => (string) $ext['element'],
+                        'type'    => (string) $ext['type'],
+                        'folder'  => (string) $ext['folder'],
+                        'enabled' => (int) $ext['enabled'],
+                        'version' => is_array($metadata) ? (string) ($metadata['version'] ?? '') : '',
+                        'status'  => $this->classifyExtension($ext),
+                    ];
                 }
             }
 
-            $stmt = $pdo->query("SELECT name, element, type, folder, enabled FROM {$p}extensions WHERE type IN ('component','module','plugin','template')");
-            foreach ($stmt->fetchAll() as $ext) {
-                $report['extensions'][] = [
-                    'name'    => $ext['name'],
-                    'element' => $ext['element'],
-                    'type'    => $ext['type'],
-                    'folder'  => $ext['folder'],
-                    'enabled' => (int) $ext['enabled'],
-                    'status'  => $this->classifyExtension($ext),
-                ];
-            }
-
             $report['success'] = true;
-        } catch (\Exception $e) {
-            $report['error'] = $e->getMessage();
+        } catch (\PDOException $e) {
+            $report['error'] = $connected
+                ? 'З’єднання встановлено, але не вдалося прочитати схему бази даних. Перевірте права користувача та префікс таблиць.'
+                : 'Не вдалося підключитися до бази даних. Перевірте хост, назву БД, користувача та пароль.';
         }
 
         return $report;
@@ -57,14 +136,20 @@ class AnalyzeModel extends BaseDatabaseModel
 
     private function classifyExtension(array $ext): string
     {
-        $el = $ext['element'];
-        if (strpos($el, 'com_content') === 0) return '✅ основний контент';
-        if (strpos($el, 'com_users') === 0) return '✅ основний контент';
-        if (strpos($el, 'com_menus') === 0) return '✅ основний контент';
-        if (strpos($el, 'com_modules') === 0) return '✅ основний контент';
-        if (strpos($el, 'com_k2') === 0) return '❌ K2 не підтримується, рекомендовано Migrate K2 Pro';
-        if (strpos($el, 'com_virtuemart') === 0) return '⚠️ VirtueMart потребує адаптера';
-        if (strpos($el, 'com_kunena') === 0) return '⚠️ Kunena потребує адаптера';
-        return '⚠️ потребує ручної обробки';
+        $element = (string) ($ext['element'] ?? '');
+
+        if (in_array($element, ['com_content', 'com_users', 'com_menus', 'com_modules'], true)) {
+            return 'Часткова підтримка: матеріали, категорії, користувачі, меню та mod_custom';
+        }
+
+        if ($element === 'com_k2') {
+            return 'Перенесення не підтримується: адаптера K2 поки немає';
+        }
+
+        if ($element === 'com_virtuemart') {
+            return 'Перенесення не підтримується: адаптера VirtueMart поки немає';
+        }
+
+        return 'Не перевірено: потрібен маніфест розширення та правило сумісності';
     }
 }
