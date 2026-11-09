@@ -13,6 +13,7 @@ class HtmlView extends BaseHtmlView
 
     public function display($tpl = null)
     {
+        $this->addTemplatePath(__DIR__ . '/tmpl');
         parent::display($tpl);
     }
 }
