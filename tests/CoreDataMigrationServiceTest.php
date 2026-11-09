@@ -217,12 +217,14 @@ $oldRoot = dirname($newRoot);
 mkdir($oldRoot . '/administrator/manifests/files', 0755, true);
 mkdir($newRoot, 0755, true);
 file_put_contents($oldRoot . '/configuration.php', '<?php');
-file_put_contents($oldRoot . '/administrator/manifests/files/joomla.xml', '<extension><version>3.10.12</version></extension>');
+file_put_contents($oldRoot . '/administrator/manifests/files/joomla.xml', '<extension><version>6.1.1</version></extension>');
 define('JPATH_ROOT', $newRoot);
 $versionPdo->exec('DELETE FROM source_extensions');
+$versionPdo->prepare('INSERT INTO source_extensions VALUES (?, ?, ?)')
+    ->execute(['component', 'com_admin', json_encode(['version' => '4.0.0'])]);
 $filesystemProfile = $resolver->resolve($versionPdo, 'source_', '..', 'auto');
-assertSameValue('3.10.12', $filesystemProfile['detected_version'], 'Filesystem Joomla manifest detection');
-assertSameValue('3', $filesystemProfile['effective_family'], 'Filesystem detected Joomla family');
+assertSameValue('6.1.1', $filesystemProfile['detected_version'], 'Filesystem version overrides stale database metadata');
+assertSameValue('6', $filesystemProfile['effective_family'], 'Filesystem detected Joomla family');
 
 $cleanup = function ($path) use (&$cleanup) {
     if (is_link($path) || !is_dir($path)) {

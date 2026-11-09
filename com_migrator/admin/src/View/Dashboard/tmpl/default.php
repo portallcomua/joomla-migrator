@@ -53,6 +53,13 @@ $escape = static function ($value) {
                 <button type="submit" class="btn btn-primary">Аналізувати</button>
                 <button
                     type="submit"
+                    class="btn btn-outline-secondary ms-2"
+                    formaction="<?php echo \Joomla\CMS\Router\Route::_('index.php?option=com_migrator&task=exportCsv'); ?>"
+                >
+                    Завантажити звіт CSV
+                </button>
+                <button
+                    type="submit"
                     class="btn btn-danger ms-2"
                     formaction="<?php echo \Joomla\CMS\Router\Route::_('index.php?option=com_migrator&task=importCore'); ?>"
                     onclick="return confirm('Імпортувати дані ядра в поточний сайт? Перед запуском зробіть резервну копію.');"

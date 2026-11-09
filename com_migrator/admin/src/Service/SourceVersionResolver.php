@@ -7,12 +7,12 @@ class SourceVersionResolver
 
     public function resolve(\PDO $source, string $prefix, string $relativeRoot, string $override = 'auto'): array
     {
-        $detectedVersion = $this->detectDatabaseVersion($source, $prefix);
-        $versionSource = $detectedVersion === '' ? '' : 'manifest_cache БД';
+        $detectedVersion = $this->detectFilesystemVersion($relativeRoot);
+        $versionSource = $detectedVersion === '' ? '' : 'administrator/manifests/files/joomla.xml';
 
         if ($detectedVersion === '') {
-            $detectedVersion = $this->detectFilesystemVersion($relativeRoot);
-            $versionSource = $detectedVersion === '' ? '' : 'administrator/manifests/files/joomla.xml';
+            $detectedVersion = $this->detectDatabaseVersion($source, $prefix);
+            $versionSource = $detectedVersion === '' ? '' : 'manifest_cache БД';
         }
 
         $detectedFamily = $this->familyFromVersion($detectedVersion);
@@ -50,6 +50,10 @@ class SourceVersionResolver
 
     private function detectFilesystemVersion(string $relativeRoot): string
     {
+        if (!defined('JPATH_ROOT')) {
+            return '';
+        }
+
         $relativeRoot = trim($relativeRoot);
 
         if ($relativeRoot === '' || $relativeRoot[0] === '/' || $relativeRoot[0] === '\\'
