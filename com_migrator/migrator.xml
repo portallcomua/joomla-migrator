@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <extension type="component" method="upgrade">
-    <name>COM_MIGRATOR</name>
+    <name>com_migrator</name>
     <author>Your Name</author>
-    <version>0.2.0</version>
-    <description>COM_MIGRATOR_DESCRIPTION</description>
-    <element>com_migrator</element>
+    <creationDate>2024</creationDate>
+    <version>0.2.2</version>
+    <description>Інструмент міграції</description>
+    
     <namespace path="src">Migrator\Component\Migrator</namespace>
+    
     <administration>
-        <menu img="class:generic">COM_MIGRATOR</menu>
+        <menu img="class:generic">Мігратор Joomla</menu>
         <files folder="admin">
+            <filename>migrator.php</filename>
             <folder>src</folder>
             <folder>language</folder>
         </files>
