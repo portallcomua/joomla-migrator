@@ -3,7 +3,15 @@ namespace Migrator\Component\Migrator\Administrator\Service;
 
 class CoreDataMigrationService
 {
-    public function migrate(\PDO $source, string $sourcePrefix, $target, string $migrationId, array $versionProfile = []): array
+    public function migrate(
+        \PDO $source,
+        string $sourcePrefix,
+        $target,
+        string $migrationId,
+        array $versionProfile = [],
+        array $modulePositionMap = [],
+        int $targetTemplateStyleId = 0
+    ): array
     {
         $result = [
             'success' => false,
@@ -37,7 +45,15 @@ class CoreDataMigrationService
             }
             $this->migrateMenuTypes($source, $sourcePrefix, $target, $migrationId, $result);
             $this->migrateMenuItems($source, $sourcePrefix, $target, $migrationId, $result);
-            $this->migrateCustomModules($source, $sourcePrefix, $target, $migrationId, $result);
+            $this->migrateCustomModules(
+                $source,
+                $sourcePrefix,
+                $target,
+                $migrationId,
+                $modulePositionMap,
+                $targetTemplateStyleId,
+                $result
+            );
             $this->migrateModuleAssignments($source, $sourcePrefix, $target, $migrationId, $result);
             $result['success'] = $result['errors'] === [];
         } catch (\Throwable $e) {
@@ -575,7 +591,15 @@ class CoreDataMigrationService
         }
     }
 
-    private function migrateCustomModules(\PDO $source, string $prefix, $target, string $migrationId, array &$result): void
+    private function migrateCustomModules(
+        \PDO $source,
+        string $prefix,
+        $target,
+        string $migrationId,
+        array $modulePositionMap,
+        int $targetTemplateStyleId,
+        array &$result
+    ): void
     {
         $rows = $source->query(
             "SELECT * FROM `{$prefix}modules` WHERE client_id = 0 AND module = 'mod_custom' ORDER BY ordering, id"
@@ -596,6 +620,16 @@ class CoreDataMigrationService
                     if (!empty($module[$authorField])) {
                         $module[$authorField] = $this->getMappedId($target, $migrationId, 'user', (int) $module[$authorField]) ?? 0;
                     }
+                }
+
+                $sourcePosition = (string) ($module['position'] ?? '');
+
+                if (array_key_exists($sourcePosition, $modulePositionMap)) {
+                    $module['position'] = $modulePositionMap[$sourcePosition];
+                }
+
+                if ($targetTemplateStyleId > 0 && isset($targetColumns['template_style_id'])) {
+                    $module['template_style_id'] = $targetTemplateStyleId;
                 }
 
                 $module['checked_out'] = 0;

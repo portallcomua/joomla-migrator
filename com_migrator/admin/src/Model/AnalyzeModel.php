@@ -4,6 +4,7 @@ namespace Migrator\Component\Migrator\Administrator\Model;
 \defined('_JEXEC') or die;
 
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
+use Migrator\Component\Migrator\Administrator\Service\TargetTemplateService;
 
 class AnalyzeModel extends BaseDatabaseModel
 {
@@ -19,12 +20,33 @@ class AnalyzeModel extends BaseDatabaseModel
             'target_version' => '',
             'summary' => [],
             'extensions' => [],
+            'module_positions' => [],
+            'target_template_style_id' => 0,
+            'target_template' => '',
+            'target_template_positions' => [],
         ];
 
         try {
             $report['target_version'] = (new \Joomla\CMS\Version())->getShortVersion();
         } catch (\Throwable $e) {
             $report['target_version'] = 'Не вдалося визначити';
+        }
+
+        $templateStyles = $this->getTargetTemplateStyles();
+        $requestedStyleId = (int) ($data['target_template_style_id'] ?? 0);
+        $selectedStyle = null;
+
+        foreach ($templateStyles as $style) {
+            if ($style['id'] === $requestedStyleId && $requestedStyleId > 0) {
+                $selectedStyle = $style;
+                break;
+            }
+        }
+
+        if ($selectedStyle !== null) {
+            $report['target_template_style_id'] = $selectedStyle['id'];
+            $report['target_template'] = $selectedStyle['template'];
+            $report['target_template_positions'] = $selectedStyle['positions'];
         }
 
         foreach (['host', 'db', 'user', 'prefix'] as $key) {
@@ -87,8 +109,22 @@ class AnalyzeModel extends BaseDatabaseModel
             }
 
             if ($report['summary']['modules'] !== null) {
-                $stmt = $pdo->query("SELECT COUNT(*) FROM `{$p}modules` WHERE module = 'mod_custom'");
+                $stmt = $pdo->query(
+                    "SELECT COUNT(*) FROM `{$p}modules` WHERE client_id = 0 AND module = 'mod_custom'"
+                );
                 $report['summary']['custom_html_modules'] = (int) $stmt->fetchColumn();
+
+                $stmt = $pdo->query(
+                    "SELECT position, COUNT(*) AS amount FROM `{$p}modules` "
+                    . "WHERE client_id = 0 AND module = 'mod_custom' GROUP BY position ORDER BY position"
+                );
+
+                foreach ($stmt->fetchAll() as $row) {
+                    $report['module_positions'][] = [
+                        'position' => (string) ($row['position'] ?? ''),
+                        'count' => (int) $row['amount'],
+                    ];
+                }
             } else {
                 $report['summary']['custom_html_modules'] = null;
             }
@@ -132,6 +168,15 @@ class AnalyzeModel extends BaseDatabaseModel
         }
 
         return $report;
+    }
+
+    public function getTargetTemplateStyles(): array
+    {
+        try {
+            return (new TargetTemplateService())->getStyles($this->getDatabase());
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     private function classifyExtension(array $ext): string

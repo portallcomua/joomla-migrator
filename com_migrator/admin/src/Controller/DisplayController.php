@@ -15,6 +15,7 @@ class DisplayController extends BaseController
     {
         $view = $this->getView('Dashboard', 'html');
         $view->report = null;
+        $this->setTemplateOptions($view);
         $view->display();
     }
 
@@ -34,6 +35,9 @@ class DisplayController extends BaseController
 
         $view = $this->getView('Dashboard', 'html');
         $view->report = $report;
+        $view->analysisData = $data;
+        unset($view->analysisData['pass']);
+        $this->setTemplateOptions($view);
         $view->display();
     }
 
@@ -65,6 +69,7 @@ class DisplayController extends BaseController
         $writeRow(['Сайт', 'Версія Joomla', $report['version'] ?? '']);
         $writeRow(['Сайт', 'Джерело версії', $report['version_source'] ?? '']);
         $writeRow(['Сайт', 'Профіль імпорту', $report['version_family'] ?? '']);
+        $writeRow(['Шаблон', 'Цільовий стиль', $report['target_template'] ?? '']);
         $writeRow(['Сайт', 'Результат аналізу', !empty($report['success']) ? 'Успішно' : 'Помилка']);
 
         if (!empty($report['error'])) {
@@ -109,6 +114,18 @@ class DisplayController extends BaseController
             ]);
         }
 
+        $writeRow(['Модулі', 'Позиція джерела', 'Кількість']);
+
+        foreach (($report['module_positions'] ?? []) as $modulePosition) {
+            $writeRow(['Модулі', $modulePosition['position'], $modulePosition['count']]);
+        }
+
+        $writeRow(['Шаблон', 'Доступна позиція', '']);
+
+        foreach (($report['target_template_positions'] ?? []) as $targetPosition) {
+            $writeRow(['Шаблон', $targetPosition, '']);
+        }
+
         $writeRow(['Розширення', 'Назва', 'Елемент', 'Тип', 'Версія', 'Статус перенесення']);
 
         foreach (($report['extensions'] ?? []) as $extension) {
@@ -142,7 +159,29 @@ class DisplayController extends BaseController
             'pass'   => $input->get('old_pass', '', 'raw'),
             'old_root' => $input->getString('old_root', '..'),
             'version_override' => $input->getString('old_version', 'auto'),
+            'target_template_style_id' => $input->getInt('target_template_style_id', 0),
         ];
+    }
+
+    private function getModulePositionMap($input): array
+    {
+        $sources = $input->get('module_position_sources', [], 'array');
+        $targets = $input->get('target_module_positions', [], 'array');
+        $map = [];
+
+        foreach ($sources as $index => $source) {
+            if (is_scalar($source) && isset($targets[$index]) && is_scalar($targets[$index])) {
+                $map[(string) $source] = (string) $targets[$index];
+            }
+        }
+
+        return $map;
+    }
+
+    private function setTemplateOptions($view): void
+    {
+        $model = $this->getModel('Analyze', 'Administrator');
+        $view->templateOptions = $model->getTargetTemplateStyles();
     }
 
     public function copyMedia()
@@ -153,7 +192,8 @@ class DisplayController extends BaseController
             throw new \RuntimeException(Text::_('JINVALID_TOKEN'), 403);
         }
 
-        $sourceRoot = $app->getInput()->getString('old_root', '..');
+        $input = $app->getInput();
+        $sourceRoot = $input->getString('old_root', '..');
 
         /** @var \Migrator\Component\Migrator\Administrator\Model\MigrationModel $model */
         $model = $this->getModel('Migration', 'Administrator');
@@ -162,6 +202,7 @@ class DisplayController extends BaseController
         $view = $this->getView('Dashboard', 'html');
         $view->report = null;
         $view->mediaReport = $mediaReport;
+        $this->setTemplateOptions($view);
         $view->display();
     }
 
@@ -174,15 +215,9 @@ class DisplayController extends BaseController
         }
 
         $input = $app->getInput();
-        $data = [
-            'host' => $input->getString('old_host', 'localhost'),
-            'db' => $input->getString('old_db', ''),
-            'prefix' => $input->getString('old_prefix', ''),
-            'user' => $input->getString('old_user', ''),
-            'pass' => $input->get('old_pass', '', 'raw'),
-            'old_root' => $input->getString('old_root', '..'),
-            'version_override' => $input->getString('old_version', 'auto'),
-        ];
+        $data = $this->getAnalysisData($input);
+        $data['module_position_map'] = $this->getModulePositionMap($input);
+        $data['set_template_default'] = $input->getBool('set_template_default', false);
 
         /** @var \Migrator\Component\Migrator\Administrator\Model\MigrationModel $model */
         $model = $this->getModel('Migration', 'Administrator');
@@ -193,6 +228,9 @@ class DisplayController extends BaseController
         $view->report = null;
         $view->mediaReport = $mediaReport;
         $view->migrationReport = $migrationReport;
+        $view->analysisData = $data;
+        unset($view->analysisData['pass'], $view->analysisData['module_position_map'], $view->analysisData['set_template_default']);
+        $this->setTemplateOptions($view);
         $view->display();
     }
 }

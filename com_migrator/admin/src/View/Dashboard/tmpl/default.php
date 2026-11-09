@@ -4,6 +4,19 @@ defined('_JEXEC') or die;
 $escape = static function ($value) {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 };
+$analysisData = $this->analysisData ?? [];
+$report = $this->report ?? null;
+$templateOptions = $this->templateOptions ?? [];
+$selectedStyleId = (int) ($analysisData['target_template_style_id'] ?? ($report['target_template_style_id'] ?? 0));
+
+if ($selectedStyleId < 1) {
+    foreach ($templateOptions as $styleOption) {
+        if ($styleOption['home'] === 1) {
+            $selectedStyleId = $styleOption['id'];
+            break;
+        }
+    }
+}
 ?>
 <div class="container mt-4">
     <h2>Мігратор Joomla — Аналіз старої бази даних</h2>
@@ -12,61 +25,123 @@ $escape = static function ($value) {
         <div class="row mb-3">
             <div class="col-md-4">
                 <label class="form-label">Хост старої БД</label>
-                <input type="text" name="old_host" value="localhost" class="form-control" required>
+                <input type="text" name="old_host" value="<?php echo $escape($analysisData['host'] ?? 'localhost'); ?>" class="form-control" required>
             </div>
             <div class="col-md-4">
                 <label class="form-label">Ім'я БД</label>
-                <input type="text" name="old_db" class="form-control" required>
+                <input type="text" name="old_db" value="<?php echo $escape($analysisData['db'] ?? ''); ?>" class="form-control" required>
             </div>
             <div class="col-md-4">
                 <label class="form-label">Префікс</label>
-                <input type="text" name="old_prefix" class="form-control" required>
+                <input type="text" name="old_prefix" value="<?php echo $escape($analysisData['prefix'] ?? 'jos_'); ?>" class="form-control" required>
             </div>
         </div>
         <div class="row mb-3">
             <div class="col-md-6">
                 <label class="form-label" for="migration-old-root">Корінь старого сайту відносно нового</label>
-                <input id="migration-old-root" type="text" name="old_root" value=".." class="form-control" required>
+                <input id="migration-old-root" type="text" name="old_root" value="<?php echo $escape($analysisData['old_root'] ?? '..'); ?>" class="form-control" required>
             </div>
             <div class="col-md-6">
                 <label class="form-label" for="old-version">Версія старої Joomla (резервний вибір)</label>
                 <select id="old-version" name="old_version" class="form-select">
-                    <option value="auto" selected>Визначити автоматично</option>
-                    <option value="2.5">2.5.x</option>
-                    <option value="3">3.x</option>
-                    <option value="4">4.x</option>
-                    <option value="5">5.x</option>
-                    <option value="6">6.x</option>
+                    <?php $versionOverride = (string) ($analysisData['version_override'] ?? 'auto'); ?>
+                    <option value="auto" <?php echo $versionOverride === 'auto' ? 'selected' : ''; ?>>Визначити автоматично</option>
+                    <option value="2.5" <?php echo $versionOverride === '2.5' ? 'selected' : ''; ?>>2.5.x</option>
+                    <option value="3" <?php echo $versionOverride === '3' ? 'selected' : ''; ?>>3.x</option>
+                    <option value="4" <?php echo $versionOverride === '4' ? 'selected' : ''; ?>>4.x</option>
+                    <option value="5" <?php echo $versionOverride === '5' ? 'selected' : ''; ?>>5.x</option>
+                    <option value="6" <?php echo $versionOverride === '6' ? 'selected' : ''; ?>>6.x</option>
                 </select>
             </div>
         </div>
         <div class="row mb-3">
             <div class="col-md-4">
                 <label class="form-label">Користувач</label>
-                <input type="text" name="old_user" class="form-control" required>
+                <input type="text" name="old_user" value="<?php echo $escape($analysisData['user'] ?? ''); ?>" class="form-control" required>
             </div>
             <div class="col-md-4">
-                <label class="form-label">Пароль</label>
+                <label class="form-label">Пароль<?php echo !empty($report['success']) ? ' (введіть знову для CSV або імпорту)' : ''; ?></label>
                 <input type="password" name="old_pass" class="form-control">
             </div>
-            <div class="col-md-4 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary">Аналізувати</button>
-                <button
-                    type="submit"
-                    class="btn btn-outline-secondary ms-2"
-                    formaction="<?php echo \Joomla\CMS\Router\Route::_('index.php?option=com_migrator&task=exportCsv'); ?>"
-                >
-                    Завантажити звіт CSV
-                </button>
-                <button
-                    type="submit"
-                    class="btn btn-danger ms-2"
-                    formaction="<?php echo \Joomla\CMS\Router\Route::_('index.php?option=com_migrator&task=importCore'); ?>"
-                    onclick="return confirm('Імпортувати дані ядра в поточний сайт? Перед запуском зробіть резервну копію.');"
-                >
-                    Перенести дані ядра Joomla
-                </button>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label class="form-label" for="target-template-style">Шаблон і стиль для перенесених модулів</label>
+                <select id="target-template-style" name="target_template_style_id" class="form-select">
+                    <?php if (!$templateOptions): ?>
+                        <option value="0" selected>Встановлених frontend-стилів не знайдено</option>
+                    <?php endif; ?>
+                    <?php foreach ($templateOptions as $styleOption): ?>
+                        <option value="<?php echo (int) $styleOption['id']; ?>" <?php echo $selectedStyleId === $styleOption['id'] ? 'selected' : ''; ?>>
+                            <?php echo $escape($styleOption['title'] . ' (' . $styleOption['template'] . ')'); ?><?php echo $styleOption['home'] ? ' — основний' : ''; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <?php if (!$templateOptions): ?>
+                    <div class="form-text">Не вдалося прочитати встановлені frontend-шаблони.</div>
+                <?php endif; ?>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" name="set_template_default" value="1" id="set-template-default">
+                    <label class="form-check-label" for="set-template-default">Зробити вибраний стиль основним після перенесення</label>
+                </div>
             </div>
+        </div>
+
+        <?php if (!empty($report['success']) && !empty($report['module_positions'])): ?>
+            <h3 class="mt-3">Позиції модулів</h3>
+            <?php if (empty($report['target_template_positions'])): ?>
+                <div class="alert alert-warning">У вибраному шаблоні не знайдено позицій у templateDetails.xml. Модулі збережуть позиції старого сайту.</div>
+            <?php else: ?>
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered table-sm">
+                        <thead><tr><th>Позиція джерела</th><th>Модулів</th><th>Позиція цільового шаблону</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($report['module_positions'] as $positionIndex => $modulePosition): ?>
+                            <?php
+                            $sourcePosition = (string) $modulePosition['position'];
+                            $matchedPosition = in_array($sourcePosition, $report['target_template_positions'], true) ? $sourcePosition : '';
+                            ?>
+                            <tr>
+                                <td><?php echo $escape($sourcePosition !== '' ? $sourcePosition : '(без позиції)'); ?></td>
+                                <td><?php echo (int) $modulePosition['count']; ?></td>
+                                <td>
+                                    <input type="hidden" name="module_position_sources[<?php echo (int) $positionIndex; ?>]" value="<?php echo $escape($sourcePosition); ?>">
+                                    <select name="target_module_positions[<?php echo (int) $positionIndex; ?>]" class="form-select form-select-sm">
+                                        <option value="" <?php echo $matchedPosition === '' ? 'selected' : ''; ?>>Без позиції</option>
+                                        <?php foreach ($report['target_template_positions'] as $targetPosition): ?>
+                                            <option value="<?php echo $escape($targetPosition); ?>" <?php echo $matchedPosition === $targetPosition ? 'selected' : ''; ?>>
+                                                <?php echo $escape($targetPosition); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
+
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <button type="submit" class="btn btn-primary">Аналізувати</button>
+            <button
+                type="submit"
+                class="btn btn-outline-secondary"
+                formaction="<?php echo \Joomla\CMS\Router\Route::_('index.php?option=com_migrator&task=exportCsv'); ?>"
+            >
+                Завантажити звіт CSV
+            </button>
+            <button
+                type="submit"
+                class="btn btn-danger"
+                formaction="<?php echo \Joomla\CMS\Router\Route::_('index.php?option=com_migrator&task=importCore'); ?>"
+                <?php echo empty($report['success']) || empty($report['version_family']) ? 'disabled' : ''; ?>
+                onclick="return confirm('Імпортувати дані ядра в поточний сайт? Перед запуском зробіть резервну копію.');"
+            >
+                Перенести дані ядра Joomla
+            </button>
         </div>
         <?php echo \Joomla\CMS\HTML\HTMLHelper::_('form.token'); ?>
     </form>

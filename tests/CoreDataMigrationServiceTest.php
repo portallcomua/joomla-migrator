@@ -2,6 +2,7 @@
 
 require dirname(__DIR__) . '/com_migrator/admin/src/Service/CoreDataMigrationService.php';
 require dirname(__DIR__) . '/com_migrator/admin/src/Service/SourceVersionResolver.php';
+require dirname(__DIR__) . '/com_migrator/admin/src/Service/TargetTemplateService.php';
 
 class TestJoomlaDatabase
 {
@@ -31,6 +32,11 @@ class TestJoomlaDatabase
         $statement = $this->pdo->query($this->query);
 
         return $statement->fetch(PDO::FETCH_OBJ) ?: null;
+    }
+
+    public function loadAssocList(): array
+    {
+        return $this->pdo->query($this->query)->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function loadResult()
@@ -138,14 +144,14 @@ $targetPdo->exec('CREATE TABLE j_extensions (extension_id INTEGER PRIMARY KEY, e
 $targetPdo->exec("INSERT INTO j_extensions VALUES (1,'com_content','component')");
 $targetPdo->exec('CREATE TABLE j_menu (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER, lft INTEGER, rgt INTEGER, level INTEGER, path TEXT, menutype TEXT, client_id INTEGER, component_id INTEGER, type TEXT, title TEXT, alias TEXT, link TEXT, published INTEGER, access INTEGER, home INTEGER, params TEXT, language TEXT, ordering INTEGER, checked_out INTEGER, checked_out_time TEXT)');
 $targetPdo->exec("INSERT INTO j_menu (id,parent_id,lft,rgt,level,path,menutype,client_id,title,alias,type,link,published,home,language) VALUES (1,0,0,1,0,'','',0,'ROOT','root','root','',1,0,'*')");
-$targetPdo->exec('CREATE TABLE j_modules (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, module TEXT, position TEXT, published INTEGER, access INTEGER, showtitle INTEGER, params TEXT, client_id INTEGER, language TEXT, ordering INTEGER, checked_out INTEGER, checked_out_time TEXT)');
+$targetPdo->exec('CREATE TABLE j_modules (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, module TEXT, position TEXT, published INTEGER, access INTEGER, showtitle INTEGER, params TEXT, client_id INTEGER, language TEXT, ordering INTEGER, checked_out INTEGER, checked_out_time TEXT, template_style_id INTEGER)');
 $targetPdo->exec('CREATE TABLE j_modules_menu (moduleid INTEGER, menuid INTEGER, UNIQUE(moduleid, menuid))');
 
 $target = new TestJoomlaDatabase($targetPdo);
 $service = new Migrator\Component\Migrator\Administrator\Service\CoreDataMigrationService();
 $versionProfile = ['detected_version' => '2.5.28', 'effective_family' => '2.5'];
 $migrationId = str_repeat('c', 64);
-$first = $service->migrate($source, 'src_', $target, $migrationId, $versionProfile);
+$first = $service->migrate($source, 'src_', $target, $migrationId, $versionProfile, ['footer' => 'sidebar'], 9);
 assertSameValue(true, $first['success'], 'Initial import status');
 assertSameValue(1, $first['usergroups'], 'Imported user groups');
 assertSameValue(1, $first['users'], 'Imported users');
@@ -178,6 +184,8 @@ assertSameValue((int) $group['id'], (int) $membership['group_id'], 'User group m
 assertSameValue('index.php?option=com_content&view=article&id=' . $article['id'], $menu['link'], 'Menu article link mapping');
 assertSameValue(0, (int) $menu['home'], 'Home flag deferred for manual choice');
 assertSameValue('<img src="images/detail/image.png">', $module['content'], 'Custom HTML content');
+assertSameValue('sidebar', $module['position'], 'Custom module position mapping');
+assertSameValue(9, (int) $module['template_style_id'], 'Custom module target template style');
 assertSameValue((int) $menu['id'], (int) $assignment['menuid'], 'Module menu assignment');
 
 $second = $service->migrate($source, 'src_', $target, $migrationId, $versionProfile);
@@ -225,6 +233,22 @@ $versionPdo->prepare('INSERT INTO source_extensions VALUES (?, ?, ?)')
 $filesystemProfile = $resolver->resolve($versionPdo, 'source_', '..', 'auto');
 assertSameValue('6.1.1', $filesystemProfile['detected_version'], 'Filesystem version overrides stale database metadata');
 assertSameValue('6', $filesystemProfile['effective_family'], 'Filesystem detected Joomla family');
+
+mkdir($newRoot . '/templates/shaper_helixultimate', 0755, true);
+file_put_contents(
+    $newRoot . '/templates/shaper_helixultimate/templateDetails.xml',
+    '<extension><positions><position>left</position><position>right</position><position>footer1</position></positions></extension>'
+);
+$targetPdo->exec(
+    'CREATE TABLE j_template_styles (id INTEGER PRIMARY KEY, template TEXT, title TEXT, home INTEGER, client_id INTEGER)'
+);
+$targetPdo->exec("INSERT INTO j_template_styles VALUES (9,'shaper_helixultimate','Helix Ultimate',1,0)");
+$templateService = new Migrator\Component\Migrator\Administrator\Service\TargetTemplateService();
+$templateStyles = $templateService->getStyles($target);
+assertSameValue('shaper_helixultimate', $templateStyles[0]['template'], 'Detected installed template style');
+assertSameValue(['left', 'right', 'footer1'], $templateStyles[0]['positions'], 'Read target template positions');
+$templateService->setDefaultStyle($target, 9);
+assertSameValue(1, (int) $targetPdo->query('SELECT home FROM j_template_styles WHERE id = 9')->fetchColumn(), 'Set default template style');
 
 $cleanup = function ($path) use (&$cleanup) {
     if (is_link($path) || !is_dir($path)) {

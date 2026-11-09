@@ -10,6 +10,8 @@ class HtmlView extends BaseHtmlView
     public $report = null;
     public $mediaReport = null;
     public $migrationReport = null;
+    public $templateOptions = [];
+    public $analysisData = [];
 
     public function display($tpl = null)
     {

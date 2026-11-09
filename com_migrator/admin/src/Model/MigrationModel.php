@@ -7,6 +7,7 @@ use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Migrator\Component\Migrator\Administrator\Service\CoreDataMigrationService;
 use Migrator\Component\Migrator\Administrator\Service\MediaCopyService;
 use Migrator\Component\Migrator\Administrator\Service\SourceVersionResolver;
+use Migrator\Component\Migrator\Administrator\Service\TargetTemplateService;
 
 class MigrationModel extends BaseDatabaseModel
 {
@@ -59,10 +60,66 @@ class MigrationModel extends BaseDatabaseModel
                 );
             }
 
+            $templateService = new TargetTemplateService();
+            $templateStyles = $templateService->getStyles($target);
+            $targetTemplateStyleId = (int) ($data['target_template_style_id'] ?? 0);
+            $selectedStyle = null;
+
+            foreach ($templateStyles as $style) {
+                if ($style['id'] === $targetTemplateStyleId && $targetTemplateStyleId > 0) {
+                    $selectedStyle = $style;
+                    break;
+                }
+            }
+
+            if ($targetTemplateStyleId > 0 && $selectedStyle === null) {
+                return $this->migrationError('Вибраний стиль цільового шаблону недоступний. Повторіть аналіз.');
+            }
+
+            if (!empty($data['set_template_default']) && $selectedStyle === null) {
+                return $this->migrationError('Виберіть стиль шаблону перед призначенням його основним.');
+            }
+
+            $modulePositionMap = $data['module_position_map'] ?? [];
+
+            if (!is_array($modulePositionMap)) {
+                return $this->migrationError('Некоректне зіставлення позицій модулів.');
+            }
+
+            $availablePositions = $selectedStyle['positions'] ?? [];
+
+            foreach ($modulePositionMap as $sourcePosition => $targetPosition) {
+                if (!is_string($sourcePosition) || !is_string($targetPosition)) {
+                    return $this->migrationError('Некоректне зіставлення позицій модулів.');
+                }
+
+                if ($targetPosition !== '' && !in_array($targetPosition, $availablePositions, true)) {
+                    return $this->migrationError('Вибрана позиція відсутня в цільовому шаблоні. Повторіть аналіз.');
+                }
+            }
+
             $service = new CoreDataMigrationService();
             $identity = hash('sha256', strtolower($data['host']) . "\0" . $data['db'] . "\0" . $data['prefix']);
+            $result = $service->migrate(
+                $source,
+                $data['prefix'],
+                $target,
+                $identity,
+                $versionProfile,
+                $modulePositionMap,
+                $targetTemplateStyleId
+            );
 
-            return $service->migrate($source, $data['prefix'], $target, $identity, $versionProfile);
+            if ($result['success'] && !empty($data['set_template_default'])) {
+                try {
+                    $templateService->setDefaultStyle($target, $targetTemplateStyleId);
+                } catch (\Throwable $e) {
+                    $result['success'] = false;
+                    $result['errors'][] = 'Дані перенесено, але основний шаблон не вдалося змінити.';
+                }
+            }
+
+            return $result;
         } catch (\PDOException $e) {
             return $this->migrationError('Не вдалося підключитися до старої БД. Перевірте доступ і драйвер PDO MySQL.');
         } catch (\Throwable $e) {
